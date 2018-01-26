@@ -165,10 +165,10 @@ def load(m):
             self.dir_path = dir_path
 
         def __enter__(self):
-            sys.path.insert(0, self.dir_path)
+            sys.path.append(self.dir_path)
 
         def __exit__(self, exc_type, exc_val, exc_tb):
-            sys.path = sys.path[1:]
+            sys.path = sys.path[: -1]
 
     path = m.fs_path
     search_path = os.path.dirname(path)
