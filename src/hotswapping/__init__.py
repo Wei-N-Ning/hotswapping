@@ -1,6 +1,9 @@
 
+import importlib
 import os
 import re
+import stat
+import sys
 import time
 import types
 
@@ -8,11 +11,21 @@ import types
 class ModuleDescriptor(object):
 
     def __init__(self):
-        self.dot_path = ''
         self.fs_path = ''
         self.fs_mtime = ''
         self.birth_time = ''
         self.deprecated = True
+
+
+def create_descriptor_from_fs(path):
+    if not os.path.isfile(path):
+        return None
+    m = ModuleDescriptor()
+    m.birth_time = time.time()
+    m.fs_mtime = os.stat(path)[stat.ST_MTIME]
+    m.fs_path = path
+    m.deprecated = False
+    return m
 
 
 class SearchRuleI(object):
@@ -113,13 +126,26 @@ def renew(m, search_rule, timer_rule):
     Args:
         m (ModuleDescriptor):
         search_rule (SearchRuleI):
-        timer_rule (callable):
+        timer_rule (TimerRuleI):
 
     Returns:
         ModuleDescriptor: a renewed ModuleDescriptor or None; in the first case the given ModuleDescriptor is marked
             deprecated
     """
-    return None
+    if not timer_rule.retire(m):
+        return None
+
+    path = search_rule.search(m)
+    if not path:
+        m.deprecated = False
+        return None
+
+    ret = create_descriptor_from_fs(path)
+    if not ret:
+        m.deprecated = False
+        return None
+
+    return ret
 
 
 def load(m):
@@ -132,5 +158,27 @@ def load(m):
     Returns:
         types.ModuleType:
     """
-    return None
 
+    class SysPathManip(object):
+
+        def __init__(self, dir_path):
+            self.dir_path = dir_path
+
+        def __enter__(self):
+            sys.path.insert(0, self.dir_path)
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            sys.path = sys.path[1:]
+
+    path = m.fs_path
+    search_path = os.path.dirname(path)
+    dot_path = os.path.basename(path).replace('.py', '')
+    with SysPathManip(search_path):
+        try:
+            return importlib.import_module(dot_path)
+        except Exception, e:
+            return None
+
+
+def unload(m):
+    return 0
