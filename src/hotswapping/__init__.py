@@ -181,4 +181,45 @@ def load(m):
 
 
 def unload(m):
-    return 0
+    """
+
+    Args:
+        m (ModuleDescriptor):
+
+    Returns:
+        int: number of module unloaded
+    """
+    num_removed = 0
+    dir_ = os.path.dirname(m.fs_path)
+    if not dir_:
+        return num_removed
+    dir_ = os.path.abspath(dir_)
+    for symbol in sys.modules.keys():
+        mod_ = sys.modules[symbol]
+        mod_fs_path = getattr(mod_, '__file__', '')
+        mod_dir = os.path.dirname(mod_fs_path)
+        if not mod_dir:
+            continue
+        mod_dir = os.path.abspath(mod_dir)
+        if mod_dir == dir_:
+            del sys.modules[symbol]
+            num_removed += 1
+    return num_removed
+
+
+class SymbolGetter(object):
+
+    def __init__(self, module_fs_path, max_age=3600):
+        self.m = create_descriptor_from_fs(module_fs_path)
+        self.search_rule = NewerSemanticVersion(check_existence=True)
+        self.timer_rule = MaxAge(max_age)
+
+    def __call__(self, symbol):
+        _ = renew(self.m, self.search_rule, self.timer_rule)
+        if _ is not None:
+            unload(self.m)
+            self.m = _
+        return getattr(load(self.m), symbol, None)
+
+    def __del__(self):
+        unload(self.m)

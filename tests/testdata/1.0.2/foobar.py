@@ -1,1 +1,5 @@
-FOOBAR = 0xDEAD
+
+import foobarImplChainsaw
+import foobarImplRocket
+
+FOOBAR = foobarImplChainsaw.num + foobarImplRocket.num

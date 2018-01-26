@@ -53,7 +53,45 @@ class TestRenew(unittest.TestCase):
         self.assertFalse(m.deprecated)
 
 
+class TestLoadUnload(unittest.TestCase):
 
+    def setUp(self):
+        self.module_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), 'testdata', '1.0.2', 'foobar.py')
+        )
+
+    def test_load_unload_expectSymbol(self):
+        m = hotswapping.create_descriptor_from_fs(self.module_path)
+        mod_ = hotswapping.load(m)
+        self.assertEqual(3, mod_.FOOBAR)
+        self.assertEqual(3, hotswapping.unload(m))
+
+    def test_reload_expectNewValue(self):
+        m = hotswapping.create_descriptor_from_fs(self.module_path)
+        self.assertEqual(3, hotswapping.load(m).FOOBAR)
+        hotswapping.unload(m)
+        m = hotswapping.renew(m,
+                              hotswapping.NewerSemanticVersion(check_existence=True),
+                              hotswapping.MaxAge(-1))
+        self.assertEqual(39, hotswapping.load(m).FOOBAR)
+        hotswapping.unload(m)
+
+
+class TestSymbolGetter(unittest.TestCase):
+
+    def setUp(self):
+        self.module_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), 'testdata', '1.0.2', 'foobar.py')
+        )
+
+    def test_reloadEveryTime(self):
+        getter = hotswapping.SymbolGetter(self.module_path, max_age=-1)
+        self.assertEqual(39, getter('FOOBAR'))
+        self.assertEqual(None, getter('aaa'))
+
+    def test_reloadEveryTwoHours(self):
+        getter = hotswapping.SymbolGetter(self.module_path, max_age=3600)
+        self.assertEqual(3, getter('FOOBAR'))
 
 
 if __name__ == '__main__':
