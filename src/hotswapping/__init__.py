@@ -103,6 +103,9 @@ class NewerSemanticVersion(SearchRuleI):
         return ret
 
 
+NEW_VERSION = NewerSemanticVersion(check_existence=True)
+
+
 class MaxAge(TimerRuleI):
 
     def __init__(self, max_age):
@@ -117,6 +120,9 @@ class MaxAge(TimerRuleI):
             m.deprecated = True
             return True
         return False
+
+
+LIVE_FOR_TWO_HOUR = MaxAge(3600 * 2)
 
 
 def renew(m, search_rule, timer_rule):
