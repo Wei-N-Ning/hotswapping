@@ -76,6 +76,17 @@ class TestLoadUnload(unittest.TestCase):
         self.assertEqual(39, hotswapping.load(m).FOOBAR)
         hotswapping.unload(m)
 
+    def test_expectIrregularModuleFileIgnored(self):
+        """
+        gracefully handle the situation when a module's __file__ field has non-string value
+        """
+        m = hotswapping.create_descriptor_from_fs(self.module_path)
+        hotswapping.load(m)
+        self.assertTrue(__import__('wicked'))
+
+        # should not throw even though module wicked has irregular __file__ field
+        hotswapping.unload(m)
+
 
 class TestSymbolGetter(unittest.TestCase):
 
