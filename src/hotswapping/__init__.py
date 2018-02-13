@@ -202,7 +202,12 @@ def unload(m):
     dir_ = os.path.abspath(dir_)
     for symbol in sys.modules.keys():
         mod_ = sys.modules[symbol]
-        mod_fs_path = getattr(mod_, '__file__', '')
+        mod_fs_path = getattr(mod_, '__file__', None)
+
+        # caught at Wt, the value of __file__ can sometime be a function object
+        if not isinstance(mod_fs_path, basestring):
+            continue
+
         mod_dir = os.path.dirname(mod_fs_path)
         if not mod_dir:
             continue
