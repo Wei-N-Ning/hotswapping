@@ -93,6 +93,14 @@ class TestSymbolGetter(unittest.TestCase):
         getter = hotswapping.SymbolGetter(self.module_path, max_age=3600)
         self.assertEqual(3, getter('FOOBAR'))
 
+    def test_getAllSymbols(self):
+        getter = hotswapping.SymbolGetter(self.module_path, max_age=-1)
+        d = getter.get_all(['FOOBAR', 'Doer', 'not_there'])
+        self.assertEqual(2, len(d))
+        self.assertTrue(d['FOOBAR'])
+        self.assertTrue(d['Doer'])
+        self.assertNotIn('not_there', d)
+
 
 if __name__ == '__main__':
     unittest.main()

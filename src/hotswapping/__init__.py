@@ -221,11 +221,27 @@ class SymbolGetter(object):
         self.timer_rule = MaxAge(max_age)
 
     def __call__(self, symbol):
+        return self.get_all([symbol, ]).get(symbol)
+
+    def get_all(self, symbols):
+        """
+
+        Args:
+            symbols (list):
+
+        Returns:
+            dict: a dictionary whose keys are the symbols, whose values are those imported objects
+        """
         _ = renew(self.m, self.search_rule, self.timer_rule)
         if _ is not None:
             unload(self.m)
             self.m = _
-        return getattr(load(self.m), symbol, None)
+        d = dict()
+        for symbol in symbols:
+            o = getattr(load(self.m), symbol, None)
+            if o is not None:
+                d[symbol] = o
+        return d
 
     def __del__(self):
         unload(self.m)
