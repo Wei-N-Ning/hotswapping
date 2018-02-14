@@ -16,8 +16,20 @@ class ModuleDescriptor(object):
         self.birth_time = ''
         self.deprecated = True
 
+        # optionally populated by SearchRule implementer;
+        # it is also update to them to decide whether a module descriptor holds enough metadata for searching
+        self.version_meta = dict()
+
 
 def create_descriptor_from_fs(path):
+    """
+
+    Args:
+        path (str):
+
+    Returns:
+        ModuleDescriptor:
+    """
     if not os.path.isfile(path):
         return None
     m = ModuleDescriptor()
@@ -26,6 +38,49 @@ def create_descriptor_from_fs(path):
     m.fs_path = path
     m.deprecated = False
     return m
+
+
+def create_descriptor_from_package_dao(package, dao):
+    """
+
+    Args:
+        dao (DaoI): a data accessor to retrieve package information
+        package (str): full name of a package, including the version (e.g. abc-123)
+    Returns:
+        ModuleDescriptor: guaranteed to carry version_meta
+    """
+
+
+class DaoI(object):
+    """
+    Data accessor interface to retrieve package information
+    """
+
+    def get_all(self, base_name, **kwargs):
+        """
+        Given a base name of a package (excluding the version string), returns a list of full names (including the
+        version strings)
+
+        Args:
+            base_name (str):
+            kwargs (dict): search criteria, to be implemented
+
+        Returns:
+            list: a list of package full names
+        """
+        raise NotImplementedError()
+
+    def resolve(self, packages):
+        """
+        Given a list of package full names, resolve their file paths
+
+        Args:
+            packages (list): list of package full names
+
+        Returns:
+            list: list of file path (or directories)
+        """
+        raise NotImplementedError()
 
 
 class SearchRuleI(object):
