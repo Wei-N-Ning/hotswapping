@@ -18,7 +18,7 @@ class ModuleDescriptor(object):
 
         # optionally populated by SearchRule implementer;
         # it is also update to them to decide whether a module descriptor holds enough metadata for searching
-        self.version_meta = dict()
+        self.version_meta = None
 
 
 def create_descriptor_from_fs(path):
@@ -40,7 +40,7 @@ def create_descriptor_from_fs(path):
     return m
 
 
-def create_descriptor_from_package_dao(package, dao):
+def create_descriptor_from_package_dao(package, dao, **kwargs):
     """
 
     Args:
@@ -49,6 +49,15 @@ def create_descriptor_from_package_dao(package, dao):
     Returns:
         ModuleDescriptor: guaranteed to carry version_meta
     """
+
+    paths = dao.resolve([package])
+    if len(paths) != 1:
+        return None
+    m = create_descriptor_from_fs(paths[0])
+    if m:
+        result = dao.split(package)
+        m.version_meta = dict(base_name=result[0], version=result[1], package=package)
+    return m
 
 
 class DaoI(object):
@@ -63,7 +72,7 @@ class DaoI(object):
 
         Args:
             base_name (str):
-            kwargs (dict): search criteria, to be implemented
+            kwargs: search criteria, to be implemented
 
         Returns:
             list: a list of package full names
@@ -79,6 +88,34 @@ class DaoI(object):
 
         Returns:
             list: list of file path (or directories)
+        """
+        raise NotImplementedError()
+
+    def split(self, package):
+        """
+
+        Args:
+            package (str):
+
+        Returns:
+            tuple: base name and version string
+        """
+        raise NotImplementedError()
+
+    def compare_packages(self, lhs, rhs):
+        """
+        Given two packages, return:
+
+        1: if lhs is newer than rhs
+        0: if lhs is the same as the rhs
+        -1: if lhs is older than rhs
+
+        Args:
+            lhs (str):
+            rhs (str):
+
+        Returns:
+            int:
         """
         raise NotImplementedError()
 
@@ -109,6 +146,32 @@ class TimerRuleI(object):
             bool: True if the given module descriptor is retired; False otherwise
         """
         raise NotImplementedError()
+
+
+class NewerPackageVersion(SearchRuleI):
+
+    def __init__(self, dao, **kwargs):
+        """
+
+        Args:
+            dao (DaoI):
+            check_existence (bool):
+        """
+        self.dao = dao
+        self.kwargs = kwargs
+
+    def search(self, m):
+        old_package = m.version_meta.get('package', '')
+        base_name = m.version_meta.get('base_name', '')
+        if not base_name:
+            return None
+        packages = self.dao.get_all(base_name, **self.kwargs)
+        if len(packages) != 1:
+            return None
+        new_package = packages[0]
+        if self.dao.compare_packages(new_package, old_package) < 1:
+            return None
+        return new_package
 
 
 class NewerSemanticVersion(SearchRuleI):
@@ -180,33 +243,89 @@ class MaxAge(TimerRuleI):
 LIVE_FOR_TWO_HOUR = MaxAge(3600 * 2)
 
 
-def renew(m, search_rule, timer_rule):
+class RenewInterface(object):
     """
-    Can modify the incoming module descriptor
+    To figure out how to create a new module descriptor that wraps a newer version of the module;
 
-    Args:
-        m (ModuleDescriptor):
-        search_rule (SearchRuleI):
-        timer_rule (TimerRuleI):
+    Can modify the incoming module descriptor;
+    """
 
-    Returns:
-        ModuleDescriptor: a renewed ModuleDescriptor or None; in the first case the given ModuleDescriptor is marked
+    def renew(self, m):
+        """
+
+        Args:
+            m (ModuleDescriptor):
+
+        Returns:
+            ModuleDescriptor: a renewed ModuleDescriptor or None; in the first case the given ModuleDescriptor is marked
             deprecated
-    """
-    if not timer_rule.retire(m):
-        return None
+        """
+        raise NotImplementedError()
 
-    path = search_rule.search(m)
-    if not path:
-        m.deprecated = False
-        return None
 
-    ret = create_descriptor_from_fs(path)
-    if not ret:
-        m.deprecated = False
-        return None
+class RenewFSModule(RenewInterface):
 
-    return ret
+    def __init__(self, search_rule, timer_rule):
+        """
+
+        Args:
+            search_rule (NewerSemanticVersion):
+            timer_rule (TimerRuleI):
+        """
+        self.search_rule = search_rule
+        self.timer_rule = timer_rule
+
+    def renew(self, m):
+        if not self.timer_rule.retire(m):
+            return None
+
+        path = self.search_rule.search(m)
+        if not path:
+            m.deprecated = False
+            return None
+
+        ret = create_descriptor_from_fs(path)
+        if not ret:
+            m.deprecated = False
+            return None
+
+        m.deprecated = True
+        return ret
+
+
+class RenewPackageModule(RenewInterface):
+
+    def __init__(self, search_rule, timer_rule):
+        """
+
+        Args:
+            dao (DaoI):
+            search_rule (NewerPackageVersion):
+            timer_rule (TimerRuleI):
+        """
+        self.search_rule = search_rule
+        self.timer_rule = timer_rule
+
+    def renew(self, m):
+        if not self.timer_rule.retire(m):
+            return None
+
+        package = self.search_rule.search(m)
+        if not package:
+            m.deprecated = False
+            return None
+
+        ret = create_descriptor_from_package_dao(package, self.search_rule.dao, **self.search_rule.kwargs)
+        if not ret:
+            m.deprecated = False
+            return None
+
+        m.deprecated = True
+        return ret
+
+
+def renew(m, search_rule, timer_rule):
+    return RenewFSModule(search_rule, timer_rule).renew(m)
 
 
 def load(m):
