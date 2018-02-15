@@ -2,6 +2,9 @@
 import hotswapping
 
 import unittest
+import time
+
+import packageFoo
 
 
 class MockModuleDescriptor(object):
@@ -62,6 +65,32 @@ class TestNewerSemanticVersion(unittest.TestCase):
 
         self.rule.iter_dir = _
         self.assertFalse(self.rule.search(m))
+
+
+class TestNewPackageVersion(unittest.TestCase):
+
+    def setUp(self):
+        self.dao = packageFoo.PackageFoo()
+        self.sut = hotswapping.NewerPackageVersion(self.dao)
+
+    @staticmethod
+    def _create_fake_m(path):
+        m = hotswapping.ModuleDescriptor()
+        m.birth_time = time.time()
+        m.fs_mtime = 123
+        m.fs_path = path
+        m.deprecated = False
+        return m
+
+    def test_expectNewPackage(self):
+        m = hotswapping.create_descriptor_from_package_dao('doom-1.1', self.dao, fs_creator=self._create_fake_m)
+        new_package = self.sut.search(m)
+        self.assertEqual('doom-1.2', new_package)
+
+    def test_expectNoNewPackage(self):
+        m = hotswapping.create_descriptor_from_package_dao('doom-1.2', self.dao, fs_creator=self._create_fake_m)
+        new_package = self.sut.search(m)
+        self.assertFalse(new_package)
 
 
 if __name__ == '__main__':

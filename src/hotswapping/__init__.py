@@ -14,7 +14,7 @@ class ModuleDescriptor(object):
         self.fs_path = ''
         self.fs_mtime = ''
         self.birth_time = ''
-        self.deprecated = True
+        self.deprecated = False
 
         # optionally populated by SearchRule implementer;
         # it is also update to them to decide whether a module descriptor holds enough metadata for searching
@@ -40,20 +40,23 @@ def create_descriptor_from_fs(path):
     return m
 
 
-def create_descriptor_from_package_dao(package, dao, **kwargs):
+def create_descriptor_from_package_dao(package, dao, fs_creator=None, **kwargs):
     """
 
     Args:
         dao (DaoI): a data accessor to retrieve package information
         package (str): full name of a package, including the version (e.g. abc-123)
+        fs_creator (function): default to create_descriptor_from_fs
     Returns:
         ModuleDescriptor: guaranteed to carry version_meta
     """
 
+    if fs_creator is None:
+        fs_creator = create_descriptor_from_fs
     paths = dao.resolve([package])
     if len(paths) != 1:
         return None
-    m = create_descriptor_from_fs(paths[0])
+    m = fs_creator(paths[0])
     if m:
         result = dao.split(package)
         m.version_meta = dict(base_name=result[0], version=result[1], package=package)
@@ -166,9 +169,9 @@ class NewerPackageVersion(SearchRuleI):
         if not base_name:
             return None
         packages = self.dao.get_all(base_name, **self.kwargs)
-        if len(packages) != 1:
+        if not len(packages):
             return None
-        new_package = packages[0]
+        new_package = packages[-1]
         if self.dao.compare_packages(new_package, old_package) < 1:
             return None
         return new_package
