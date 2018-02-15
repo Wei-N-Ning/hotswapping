@@ -427,3 +427,30 @@ class SymbolGetter(object):
 
     def __del__(self):
         unload(self.m)
+
+
+class SymbolGetterPackageDao(object):
+
+    def __init__(self, package, dao, max_age=3600):
+        self.m = create_descriptor_from_package_dao(package, dao)
+        self.search_rule = NewerPackageVersion(dao)
+        self.timer_rule = MaxAge(max_age=max_age)
+
+    def __call__(self, symbol):
+        return self.get_all([symbol, ]).get(symbol)
+
+    def get_all(self, symbols):
+        op = RenewPackageModule(self.search_rule, self.timer_rule)
+        _ = op.renew(self.m)
+        if _ is not None:
+            unload(self.m)
+            self.m = _
+        d = dict()
+        for symbol in symbols:
+            o = getattr(load(self.m), symbol, None)
+            if o is not None:
+                d[symbol] = o
+        return d
+
+    def __del__(self):
+        unload(self.m)
